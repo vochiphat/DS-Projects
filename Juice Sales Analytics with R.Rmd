@@ -1,0 +1,285 @@
+---
+title: "Juice Sales Analytics"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+if(!require("pacman")) install.packages("pacman")
+pacman::p_load(mice, lattice, VIM, tidyverse, e1071, ggplot2, caret, rmarkdown, corrplot, mlbench)
+theme_set(theme_classic())
+options(digits = 3)
+set.seed(123)
+```
+
+# Import data :
+The “juice.csv” data contains purchase information for Citrus Hill or Minute Maid
+orange juice. A description of the variables follows.
+
+1. Purchase: A factor with levels CH and MM indicating whether the customer
+purchased Citrus Hill or Minute Maid Orange Juice
+2. WeekofPurchase: Week of purchase
+3. StoreID: Store ID
+4. PriceCH: Price charged for CH
+5. PriceMM: Price charged for MM
+6. DiscCH: Discount offered for CH
+7. DiscMM: Discount offered for MM
+8. SpecialCH: Indicator of special on CH
+9. SpecialMM: Indicator of special on MM
+10. LoyalCH: Customer brand loyalty for CH
+11. SalePriceMM: Sale price for MM
+12. SalePriceCH: Sale price for CH
+13. PriceDiff: Sale price of MM less sale price of CH
+14. Store7: A factor with levels No and Yes indicating whether the sale is at Store 7
+15. PctDiscMM: Percentage discount for MM
+16. PctDiscCH: Percentage discount for CH
+17. ListPriceDiff: List price of MM less list price of CH
+18. STORE: Which of 5 possible stores the sale occurred at'
+
+```{r data}
+juice <- read.csv('juice.csv')
+head(juice,5)
+```
+
+# Explore Data
+
+```{r}
+colSums(is.na(juice))
+```
+```{r}
+summary(juice)
+```
+```{r}
+dim(juice)
+```
+```{r}
+str(juice)
+```
+```{r}
+ggplot(juice, aes(x = Purchase)) + 
+  geom_bar(position = "stack", color = 'steelblue', fill="steelblue")+
+  theme_minimal() +
+  geom_text(stat='count', aes(label=..count..), vjust=2, color = 'white')
+```
+All variables has no missing values
+```{r EAD}
+corr_juice <- juice[,-c(1,14)]
+head(corr_juice)
+cor(corr_juice)
+corrplot(cor(corr_juice), method = "color", type = "upper", tl.srt = 45)
+
+```
+
+# Train-Test Split (80% in train dataset and 20% in test dataset)
+
+```{r Train - Test split}
+trainindex <- createDataPartition(juice$Purchase, p=0.8, list= FALSE)
+juice_train <- juice[trainindex, ]
+juice_test <- juice[-trainindex, ]
+```
+# SVM Models
+
+## SVM Linear Model Without Tuning Parameter
+```{r SVM Model } 
+svm1 <- svm(Purchase~., data=juice_train, cost =0.01, kernel = 'linear')
+summary(svm1)
+
+ ## Performance Evaluation ##
+train_pred1 <- predict(svm1, juice_train)
+
+    # confusion matrix
+conf.matrix <- table(Predicted = train_pred1, Actual = juice_train$Purchase)
+conf.matrix
+  
+    # train accuracy
+
+train_accu <- (sum(diag(conf.matrix))) / sum(conf.matrix)
+
+test_pred1 <- predict(svm1, juice_test)
+
+    # confusion matrix
+conf.matrix <- table(Predicted = test_pred1, Actual = juice_test$Purchase)
+conf.matrix
+  
+    # test accuracy
+
+test_accu <- (sum(diag(conf.matrix))) / sum(conf.matrix)
+print('Train Error Rate:')
+print(1 - train_accu)
+print('Test Error Rate')
+print(1 - test_accu)
+```
+Summary Explanation: We have SVM-Type for classification of Purchase. The kernel that we are using is linear and cost parameter is 0.01. We have 446 support vectors. There are 224 belong to first type of purchase and 222 belongs to second type of purchase. There only 2 classes in our classiifcation problem which are CH and MM (showed in Levels).
+
+## SVM Linear With Tuned Cost Parameter
+```{r Tuning Hyper Parameter}
+tunesvm1 <- tune(svm, Purchase~., data = juice_train,
+     ranges = list(cost = (0.01:10), kernel = 'linear'))
+
+summary(tunesvm1)
+
+
+bestsvm1 <- tunesvm1$best.model
+ ## Performance Evaluation ##
+best_train_pred1 <- predict(bestsvm1, juice_train)
+
+    # confusion matrix
+conf.matrix <- table(Predicted = best_train_pred1, Actual = juice_train$Purchase)
+conf.matrix
+  
+    # best train accuracy
+
+best_train_accu <- (sum(diag(conf.matrix))) / sum(conf.matrix)
+
+best_test_pred1 <- predict(bestsvm1, juice_test)
+
+    # confusion matrix
+conf.matrix <- table(Predicted = best_test_pred1, Actual = juice_test$Purchase)
+conf.matrix
+  
+    # best test accuracy
+
+best_test_accu <- (sum(diag(conf.matrix))) / sum(conf.matrix)
+print("SVM Linear Best Train Error Rate")
+print(1 - best_train_accu)
+print("SVM Linear Best Test Error Rate")
+print(1 - best_test_accu)
+```
+
+## SVM Radial
+```{r SVM radial kernel}
+svm_rad <- svm(Purchase~., data=juice_train, cost = 0.01, kernel = 'radial')
+summary(svm_rad)
+
+ ## Performance Evaluation ##
+train_pred2 <- predict(svm_rad, juice_train)
+
+    # confusion matrix
+conf.matrix <- table(Predicted = train_pred2, Actual = juice_train$Purchase)
+conf.matrix
+  
+    # Train accuracy
+
+train_accu2 <- (sum(diag(conf.matrix))) / sum(conf.matrix)
+
+test_pred2 <- predict(svm_rad, juice_test)
+
+    # confusion matrix
+conf.matrix <- table(Predicted = test_pred2, Actual = juice_test$Purchase)
+conf.matrix
+  
+    # test accuracy
+
+test_accu2 <- (sum(diag(conf.matrix))) / sum(conf.matrix)
+print('Train Error Rate:')
+print(1 - train_accu2)
+print('Test Error Rate')
+print(1 - test_accu2)
+```
+## SVM Radial With Tuned Cost Parameter
+```{r Radial Tuned Parameter}
+tunesvm2 <- tune(svm, Purchase~., data = juice_train,
+     ranges = list(cost = (0.01:10), kernel= 'radial'))
+
+summary(tunesvm2)
+
+bestsvm2 <- tunesvm2$best.model
+print(bestsvm2)
+
+#Apply best cost
+best_train_pred2 <- predict(bestsvm2, juice_train)
+
+    # confusion matrix
+conf.matrix <- table(Predicted = best_train_pred2, Actual = juice_train$Purchase)
+conf.matrix
+  
+    # best train accuracy
+
+best_train_accu2 <- (sum(diag(conf.matrix))) / sum(conf.matrix)
+
+best_test_pred2 <- predict(bestsvm2, juice_test)
+
+    # confusion matrix
+conf.matrix <- table(Predicted = best_test_pred2, Actual = juice_test$Purchase)
+conf.matrix
+  
+    # best test accuracy
+
+best_test_accu2 <- (sum(diag(conf.matrix))) / sum(conf.matrix)
+print("SVM Radial Best Train Error Rate")
+print(1 - best_train_accu2)
+print("SVM Radial Best Test Error Rate'")
+print(1 - best_test_accu2)
+```
+
+**There is an improvement in error rate when it gets smaller with better cost parameter for SVM radial**
+
+## SVM Polynomial
+```{r SVM Polynomial}
+svm_poly <- svm(Purchase~., data=juice_train, cost = 0.01, kernel = 'polynomial', degree = 2)
+summary(svm_poly)
+
+ ## Performance Evaluation ##
+train_pred3 <- predict(svm_poly, juice_train)
+
+    # confusion matrix
+conf.matrix <- table(Predicted = train_pred3, Actual = juice_train$Purchase)
+conf.matrix
+  
+    # train accuracy
+
+train_accu3 <- (sum(diag(conf.matrix))) / sum(conf.matrix)
+
+test_pred3 <- predict(svm_poly, juice_test)
+
+    # confusion matrix
+conf.matrix <- table(Predicted = test_pred3, Actual = juice_test$Purchase)
+conf.matrix
+  
+    # test accuracy
+
+test_accu3 <- (sum(diag(conf.matrix))) / sum(conf.matrix)
+print('Train Error Rate:')
+print(1 - train_accu3)
+print('Test Error Rate')
+print(1 - test_accu3)
+
+``` 
+
+## SVM Polynomial with Tuned Cost Parameter
+```{r  SVM Polynomial Tuned Parameter}
+tunesvm3 <- tune(svm, Purchase~., data = juice_train,
+     ranges = list(cost = (0.01:10), kernel= 'polynomial', degree =2))
+
+summary(tunesvm3)
+
+bestsvm3 <- tunesvm3$best.model
+print(bestsvm3)
+
+#Apply best cost
+best_train_pred3 <- predict(bestsvm3, juice_train)
+
+    # confusion matrix
+conf.matrix <- table(Predicted = best_train_pred3, Actual = juice_train$Purchase)
+conf.matrix
+  
+    # best train accuracy
+
+best_train_accu3 <- (sum(diag(conf.matrix))) / sum(conf.matrix)
+
+best_test_pred3 <- predict(bestsvm3, juice_test)
+
+    # confusion matrix
+conf.matrix <- table(Predicted = best_test_pred3, Actual = juice_test$Purchase)
+conf.matrix
+  
+    # best test accuracy
+
+best_test_accu3 <- (sum(diag(conf.matrix))) / sum(conf.matrix)
+print("SVM Polynomial Best Train Error Rate")
+print(1 - best_train_accu3)
+print("SVM Polinomial Best Test Error Rate'")
+print(1 - best_test_accu3)
+```
+**From the above models, at best cost value, SVM with Radial kernel has better (lower) error rate for test set. We would choose a better performance models with lower error rate on test set for prediction on juice Purchase.**
